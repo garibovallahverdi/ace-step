@@ -1,22 +1,26 @@
-FROM pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime
+# Base image: RunPod-un ACE-Step ilə uyğun PyTorch image-i
+FROM runpod/pytorch:2.1.0-py3.11-cuda11.8-runtime
 
 WORKDIR /app
 
+# Non-interactive apt
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Sistem dependencies
 RUN apt-get update && apt-get install -y \
-    git ffmpeg libgl1 build-essential curl \
+    ffmpeg \
+    libgl1 \
+    git \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# ACE‑Step source
-RUN git clone https://github.com/ACE-Step/ACE-Step-1.5.git /app/ace-step
+# Python packages
+COPY requirements.txt .
+RUN pip install --upgrade pip setuptools wheel
+RUN pip install --no-cache-dir -r requirements.txt
 
-WORKDIR /app/ace-step
+# Sənin kodu
+COPY handler.py .
 
-# uv install deps & sync
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-RUN uv sync
-
-COPY handler.py /app/
-
-CMD ["uv", "run", "acestep-api"]
+# RunPod entrypoint
+CMD ["python", "handler.py"]
