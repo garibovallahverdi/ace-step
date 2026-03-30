@@ -5,7 +5,7 @@ WORKDIR /app
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
-# System dependencies
+# system deps
 RUN apt-get update && apt-get install -y \
     git \
     ffmpeg \
@@ -14,18 +14,26 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# pip upgrade
+# pip
 RUN pip install --upgrade pip setuptools wheel
 
-# requirements
+# əsas python deps
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ACE-Step install (EN SONDA!)
-RUN pip install --no-cache-dir \
-    "git+https://github.com/ace-step/ACE-Step-1.5.git"
+# 🔥 ACE-Step clone (pip YOX!)
+RUN git clone https://github.com/ace-step/ACE-Step-1.5.git /app/acestep
 
-# app
+# working dir dəyiş
+WORKDIR /app/acestep
+
+# ACE-Step öz requirements
+RUN pip install --no-cache-dir -r requirements.txt || true
+
+# geri dön
+WORKDIR /app
+
+# sənin handler
 COPY handler.py .
 
 CMD ["python", "handler.py"]
