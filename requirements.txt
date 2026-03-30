@@ -1,7 +1,7 @@
-# Əlavə lazım olan Python paketlər
-fastapi
-uvicorn
-numpy
-torch
-torchaudio
-transformers
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+numpy==1.24.3
+transformers==4.36.0
+librosa==0.10.1
+soundfile==0.12.1
+scipy==1.11.4
