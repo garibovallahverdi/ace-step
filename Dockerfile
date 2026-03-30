@@ -1,34 +1,31 @@
 FROM python:3.11-slim
+
 WORKDIR /app
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
-# SYSTEM DEPENDENCIES
+# System dependencies
 RUN apt-get update && apt-get install -y \
-    ffmpeg \
     git \
+    ffmpeg \
     libgl1 \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
-    espeak-ng \
+    build-essential \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PyTorch (CPU version)
+# pip upgrade
 RUN pip install --upgrade pip setuptools wheel
-RUN pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 
-# Install requirements
+# requirements
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install TTS (Coqui)
-RUN pip install TTS
+# ACE-Step install (EN SONDA!)
+RUN pip install --no-cache-dir \
+    "git+https://github.com/ace-step/ACE-Step-1.5.git"
 
-# Copy application code
+# app
 COPY handler.py .
 
-CMD ["python3", "handler.py"]
+CMD ["python", "handler.py"]
