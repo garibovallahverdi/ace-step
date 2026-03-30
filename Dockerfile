@@ -4,31 +4,19 @@ WORKDIR /app
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# system deps
 RUN apt-get update && apt-get install -y \
-    git \
-    ffmpeg \
-    libgl1 \
-    build-essential \
+    git ffmpeg libgl1 build-essential curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 🔥 Python 3.11 base image əvəzinə image dəyişək
-# Bu base image artıq Python 3.11 ilə gəlməlidir
-# runpod/pytorch:2.1.0-py3.11-cuda11.8-devel
-# yəni burada python upgrade və miniconda lazım deyil
+# ACE‑Step source
+RUN git clone https://github.com/ACE-Step/ACE-Step-1.5.git /app/ace-step
 
-# pip upgrade
-RUN pip install --upgrade pip setuptools wheel
+WORKDIR /app/ace-step
 
-# requirements
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# uv install deps & sync
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+RUN uv sync
 
-# ACE-Step
-RUN pip install --no-cache-dir \
-    "git+https://github.com/ACE-Step/ACE-Step-1.5.git"
+COPY handler.py /app/
 
-# kod
-COPY handler.py .
-
-CMD ["python", "handler.py"]
+CMD ["uv", "run", "acestep-api"]
