@@ -1,23 +1,33 @@
+import runpod
 import subprocess
 from pathlib import Path
+import uuid
 
-OUTPUT = Path("output.wav")
+def handler(job):
+    job_input = job["input"]
+    prompt = job_input.get("text", "Hello world")
 
-def generate_audio(text: str):
+    output_file = Path(f"/tmp/{uuid.uuid4()}.wav")
+
     cmd = [
         "python",
-        "acestep/infer.py",   # repo içindəki script
-        "--text", text,
-        "--output", str(OUTPUT)
+        "acestep/infer.py",
+        "--text", prompt,
+        "--output", str(output_file)
     ]
 
-    print("Running ACE-Step locally...")
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True)
 
-    if OUTPUT.exists():
-        print("✅ Audio generated:", OUTPUT)
-    else:
-        print("❌ Failed")
+        return {
+            "status": "success",
+            "file": str(output_file)
+        }
 
-if __name__ == "__main__":
-    generate_audio("Salam! Bu real fix-dir 🚀")
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+runpod.serverless.start({"handler": handler})
