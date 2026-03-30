@@ -20,7 +20,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Note: ACE-Step pip install bu image ilə uyğun olmalıdır,
 # əgər problem gəlsə, biz model load yoluna keçəcəyik.
 RUN pip install --no-cache-dir \
-    "git+https://github.com/ACE-Step/ACE-Step-1.5.git"
+    "git+https://github.com/ace-step/ACE-Step-1.5.git"
+    
 
 # KODUN
 COPY handler.py .
