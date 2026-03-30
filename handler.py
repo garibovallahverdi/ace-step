@@ -1,12 +1,25 @@
-import runpod
+from pathlib import Path
+import subprocess
 
-def handler(job):
-    prompt = job["input"].get("prompt", "Hello")
+# Output fayl
+OUTPUT_FILE = Path("output.wav")
 
-    return {
-        "output": f"Model cavabı: {prompt}"
-    }
+def run_acestep(prompt="Hello world"):
+    """
+    RunPod ACE-Step model call
+    Burada RunPod-un hazır environment-i istifadə olunur.
+    """
+    # Model CLI çağırışı (ACE-Step command-line)
+    # ⚡ Note: RunPod-da ACE-Step CLI artıq quraşdırılıb
+    cmd = [
+        "acestep",           # ACE-Step binary
+        "--text", prompt,
+        "--out", str(OUTPUT_FILE)
+    ]
+    
+    subprocess.run(cmd, check=True)
+    print(f"Audio generated: {OUTPUT_FILE}")
 
-runpod.serverless.start({
-    "handler": handler
-})
+if __name__ == "__main__":
+    prompt = "Salam! Bu bir test audio mesajıdır."
+    run_acestep(prompt)
