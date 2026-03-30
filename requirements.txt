@@ -1,4 +1,7 @@
+# Əlavə lazım olan Python paketlər
+fastapi
+uvicorn
+numpy
 torch
+torchaudio
 transformers
-accelerate
-runpod
