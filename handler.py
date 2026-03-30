@@ -5,18 +5,19 @@ OUTPUT = Path("output.wav")
 
 def generate_audio(text: str):
     cmd = [
-        "acestep",
+        "python",
+        "acestep/infer.py",   # repo içindəki script
         "--text", text,
-        "--out", str(OUTPUT)
+        "--output", str(OUTPUT)
     ]
 
-    print("Running ACE-Step...")
+    print("Running ACE-Step locally...")
     subprocess.run(cmd, check=True)
 
     if OUTPUT.exists():
         print("✅ Audio generated:", OUTPUT)
     else:
-        print("❌ Failed to generate audio")
+        print("❌ Failed")
 
 if __name__ == "__main__":
-    generate_audio("Salam! Bu ACE-Step testidir 🚀")
+    generate_audio("Salam! Bu real fix-dir 🚀")
