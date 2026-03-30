@@ -10,19 +10,12 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     libgl1 \
     build-essential \
-    wget \
     && rm -rf /var/lib/apt/lists/*
 
-# 🔥 MINICONDA install
-RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh && \
-    bash miniconda.sh -b -p /opt/conda && \
-    rm miniconda.sh
-
-ENV PATH=/opt/conda/bin:$PATH
-
-# 🔥 Python 3.11 env
-RUN conda create -y -n ace python=3.11
-SHELL ["conda", "run", "-n", "ace", "/bin/bash", "-c"]
+# 🔥 Python 3.11 base image əvəzinə image dəyişək
+# Bu base image artıq Python 3.11 ilə gəlməlidir
+# runpod/pytorch:2.1.0-py3.11-cuda11.8-devel
+# yəni burada python upgrade və miniconda lazım deyil
 
 # pip upgrade
 RUN pip install --upgrade pip setuptools wheel
@@ -38,4 +31,4 @@ RUN pip install --no-cache-dir \
 # kod
 COPY handler.py .
 
-CMD ["conda", "run", "-n", "ace", "python", "handler.py"]
+CMD ["python", "handler.py"]
