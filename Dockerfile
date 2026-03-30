@@ -1,5 +1,4 @@
-FROM runpod/pytorch:1.0.3-cu1300-torch291-ubuntu2404
-
+FROM python:3.11-slim
 WORKDIR /app
 
 ENV DEBIAN_FRONTEND=noninteractive
