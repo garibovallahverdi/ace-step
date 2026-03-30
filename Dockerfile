@@ -2,37 +2,40 @@ FROM pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime
 
 WORKDIR /app
 
-# 🔥 interactive problemləri söndür
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 🔥 system + Python 3.11 qururuq
+# system deps
 RUN apt-get update && apt-get install -y \
-    python3.11 \
-    python3.11-distutils \
-    python3.11-venv \
-    python3-pip \
     git \
     ffmpeg \
     libgl1 \
     build-essential \
-    tzdata \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
-# 🔥 default python → 3.11 edirik
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+# 🔥 MINICONDA install
+RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh && \
+    bash miniconda.sh -b -p /opt/conda && \
+    rm miniconda.sh
 
-# 🔥 pip upgrade (3.11 üçün)
-RUN python3 -m pip install --upgrade pip setuptools wheel
+ENV PATH=/opt/conda/bin:$PATH
+
+# 🔥 Python 3.11 env
+RUN conda create -y -n ace python=3.11
+SHELL ["conda", "run", "-n", "ace", "/bin/bash", "-c"]
+
+# pip upgrade
+RUN pip install --upgrade pip setuptools wheel
 
 # requirements
 COPY requirements.txt .
-RUN python3 -m pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# 🔥 ACE-Step (indi artıq error verməyəcək)
-RUN python3 -m pip install --no-cache-dir \
+# ACE-Step
+RUN pip install --no-cache-dir \
     "git+https://github.com/ACE-Step/ACE-Step-1.5.git"
 
 # kod
 COPY handler.py .
 
-CMD ["python3", "handler.py"]
+CMD ["conda", "run", "-n", "ace", "python", "handler.py"]
