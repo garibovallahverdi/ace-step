@@ -15,7 +15,7 @@ def handler(job):
             "message": "No text prompt provided"
         }
     
-    # Əvvəlcə ACE-Step qovluğunu yoxla
+    # DÜZGÜN YOL - ACE-Step-1.5 qovluğu
     ace_step_path = Path("/app/ACE-Step-1.5")
     
     if not ace_step_path.exists():
@@ -24,43 +24,35 @@ def handler(job):
             "message": f"ACE-Step directory not found at {ace_step_path}"
         }
     
-    # requirements-in yükləndiyini yoxla
-    print(f"Checking ACE-Step at: {ace_step_path}")
-    
     # infer.py faylını yoxla
     infer_py = ace_step_path / "infer.py"
     
     if not infer_py.exists():
-        return {
-            "status": "error",
-            "message": f"infer.py not found at {infer_py}"
-        }
-    
-    # ACE-Step qovluğunda faylları listele (debug üçün)
-    try:
-        files = list(ace_step_path.glob("*"))
-        print(f"Files in ACE-Step: {[f.name for f in files[:10]]}")
-    except:
-        pass
+        # Alternativ yolları yoxla
+        possible_paths = [
+            ace_step_path / "inference.py",
+            ace_step_path / "run.py",
+            ace_step_path / "main.py",
+            Path("/app/acestep/infer.py"),
+            Path("/app/infer.py")
+        ]
+        
+        for path in possible_paths:
+            if path.exists():
+                infer_py = path
+                break
+        
+        if not infer_py.exists():
+            # Faylları listele
+            files = list(ace_step_path.glob("*.py"))
+            return {
+                "status": "error",
+                "message": f"infer.py not found. Available py files: {[f.name for f in files]}"
+            }
     
     output_file = Path(f"/tmp/{uuid.uuid4()}.wav")
     
-    # Əvvəlcə ACE-Step-in tələblərini yüklə
-    try:
-        # requirements.txt varsa yüklə
-        req_file = ace_step_path / "requirements.txt"
-        if req_file.exists():
-            print("Installing ACE-Step requirements...")
-            subprocess.run(
-                ["pip", "install", "-r", str(req_file)],
-                cwd=str(ace_step_path),
-                capture_output=True,
-                timeout=60
-            )
-    except Exception as e:
-        print(f"Requirements install warning: {e}")
-    
-    # Komanda
+    # Komanda - düzgün yol ilə
     cmd = [
         "python",
         str(infer_py),
@@ -68,10 +60,9 @@ def handler(job):
         "--output", str(output_file)
     ]
     
-    print(f"Running command: {' '.join(cmd)}")
+    print(f"Running: {' '.join(cmd)}")
     
     try:
-        # Komandanı işə sal
         result = subprocess.run(
             cmd,
             cwd=str(ace_step_path),
@@ -81,30 +72,27 @@ def handler(job):
         )
         
         print(f"Return code: {result.returncode}")
-        print(f"STDOUT: {result.stdout}")
-        print(f"STDERR: {result.stderr}")
+        if result.stdout:
+            print(f"STDOUT: {result.stdout[:500]}")
+        if result.stderr:
+            print(f"STDERR: {result.stderr[:500]}")
         
         if result.returncode != 0:
             return {
                 "status": "error",
-                "message": f"Command failed with code {result.returncode}: {result.stderr}"
+                "message": f"Command failed: {result.stderr}"
             }
         
-        # Faylın yaradıldığını yoxla
         if not output_file.exists():
             return {
                 "status": "error",
                 "message": f"Output file not created: {output_file}"
             }
         
-        # Audio faylı oxu
         with open(output_file, "rb") as f:
             audio_data = f.read()
         
-        # Base64-ə çevir
         audio_base64 = base64.b64encode(audio_data).decode()
-        
-        # Təmizlə
         output_file.unlink()
         
         return {
@@ -124,5 +112,4 @@ def handler(job):
             "message": str(e)
         }
 
-if __name__ == "__main__":
-    runpod.serverless.start({"handler": handler})
+runpod.serverless.start({"handler": handler})
