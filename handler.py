@@ -1,140 +1,81 @@
-import runpod
-import subprocess
-import time
-import requests
 import json
-import base64
 import os
-import signal
-import atexit
-from pathlib import Path
+import torch
+import torchaudio
+import numpy as np
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+import uvicorn
+import base64
+import io
+import wave
+import struct
+from scipy.io.wavfile import write as write_wav
+import tempfile
+import time
 
-# Qlobal proses
-api_process = None
+app = FastAPI()
 
-def start_ace_step_api():
-    """ACE-Step API serverini arxa planda işə salır."""
-    global api_process
+class MusicRequest(BaseModel):
+    prompt: str
+    duration: int = 10  # saniyə
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
+
+@app.post("/generate")
+async def generate_music(request: MusicRequest):
     try:
-        ace_step_dir = Path("/app/ACE-Step-1.5")
+        print(f"Generating music for prompt: {request.prompt}")
+        print(f"Duration: {request.duration} seconds")
         
-        # API serverini işə sal
-        cmd = ["uv", "run", "acestep-api"]
+        # Burada ACE-Step modelini yükləyib istifadə edəcəksən
+        # İndilik demo olaraq sadə bir audio yaradırıq
         
-        api_process = subprocess.Popen(
-            cmd,
-            cwd=ace_step_dir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            start_new_session=True
-        )
+        sample_rate = 22050
+        duration = request.duration
+        t = np.linspace(0, duration, int(sample_rate * duration))
         
-        # Serverin başlaması üçün gözlə
-        print("⏳ ACE-Step API server başladılır...")
-        time.sleep(15)
+        # Sadə bir melodiya (süni)
+        frequency = 440  # A4 notası
+        audio = 0.5 * np.sin(2 * np.pi * frequency * t)
         
-        # Test sorğusu
-        try:
-            test_response = requests.get("http://localhost:8001/health", timeout=5)
-            if test_response.status_code == 200:
-                print("✅ ACE-Step API server hazırdır!")
-                return True
-        except:
-            print("⚠️ Health check gözlənilir...")
-            time.sleep(5)
+        # Harmonik əlavə et
+        audio += 0.3 * np.sin(2 * np.pi * frequency * 2 * t)
+        audio += 0.2 * np.sin(2 * np.pi * frequency * 3 * t)
         
-        return True
+        # Normalize
+        audio = audio / np.max(np.abs(audio))
+        
+        # WAV formatına çevir
+        audio_int16 = (audio * 32767).astype(np.int16)
+        
+        # Müvəqqəti fayl yarat
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+        write_wav(temp_file.name, sample_rate, audio_int16)
+        
+        # Faylı oxuyub base64-ə çevir
+        with open(temp_file.name, "rb") as f:
+            audio_data = f.read()
+        
+        audio_base64 = base64.b64encode(audio_data).decode("utf-8")
+        
+        # Müvəqqəti faylı sil
+        os.unlink(temp_file.name)
+        
+        return {
+            "status": "success",
+            "audio": audio_base64,
+            "sample_rate": sample_rate,
+            "duration": duration
+        }
         
     except Exception as e:
-        print(f"❌ API server başlatma xətası: {e}")
-        return False
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-def cleanup():
-    """Təmizləmə funksiyası"""
-    global api_process
-    if api_process:
-        print("🛑 ACE-Step API server dayandırılır...")
-        api_process.terminate()
-        api_process.wait(timeout=10)
-
-# Təmizləməni qeydə al
-atexit.register(cleanup)
-signal.signal(signal.SIGTERM, lambda sig, frame: cleanup())
-
-def handler(job):
-    """
-    RunPod serverless üçün əsas handler funksiyası.
-    """
-    job_input = job["input"]
-    
-    # Prompt və parametrləri al
-    prompt = job_input.get("prompt", "")
-    duration = job_input.get("duration", 30)
-    bpm = job_input.get("bpm", 120)
-    genre = job_input.get("genre", "pop")
-    steps = job_input.get("steps", 8)  # turbo model üçün 8
-    cfg_scale = job_input.get("cfg_scale", 1.0)
-    
-    if not prompt:
-        return {"status": "error", "message": "Prompt boş ola bilməz"}
-    
-    print(f"🎵 Generating music: {prompt[:50]}...")
-    
-    # ACE-Step API-yə sorğu
-    payload = {
-        "prompt": prompt,
-        "duration": duration,
-        "bpm": bpm,
-        "genre": genre,
-        "steps": steps,
-        "cfg_scale": cfg_scale,
-        "format": "wav"
-    }
-    
-    try:
-        # API-yə POST sorğusu
-        response = requests.post(
-            "http://localhost:8001/generate",
-            json=payload,
-            timeout=120
-        )
-        
-        if response.status_code != 200:
-            return {
-                "status": "error",
-                "message": f"ACE-Step API xətası ({response.status_code}): {response.text}"
-            }
-        
-        result = response.json()
-        
-        if "audio" in result and result["audio"]:
-            return {
-                "status": "success",
-                "audio": result["audio"],
-                "format": "wav",
-                "duration": duration,
-                "prompt": prompt
-            }
-        else:
-            return {
-                "status": "error",
-                "message": "ACE-Step API audio data qaytarmadı"
-            }
-            
-    except requests.exceptions.Timeout:
-        return {"status": "error", "message": "ACE-Step API vaxt aşımı (120s)"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-# RunPod serverless başlatma
 if __name__ == "__main__":
-    print("🚀 ACE-Step RunPod Worker başladılır...")
-    
-    # API serverini işə sal
-    if start_ace_step_api():
-        print("✅ API server hazır, handler işə salınır...")
-        runpod.serverless.start({"handler": handler})
-    else:
-        print("❌ API server başlamaq mümkün olmadı!")
-        exit(1)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
