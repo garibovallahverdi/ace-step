@@ -1,16 +1,21 @@
-# Python və CUDA (GPU üçün) olan hazır baza götürürük
+# PyTorch və CUDA dəstəkli rəsmi RunPod imici
 FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel
 
-# İş qovluğunu təyin edirik
+# Sistem paketlərini yeniləyirik və səs emalı üçün ffmpeg + sox quraşdırırıq
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libsox-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# İş qovluğu
 WORKDIR /
 
-# Kitabxanaları kopyalayıb yükləyirik
+# Kitabxanaları yükləyirik
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Model fayllarını və kodlarımızı içəri atırıq
+# Kodları içəri kopyalayırıq
 COPY handler.py .
-# Əgər modelin çəkisi (weights) yerlidirsə, onları da COPY ilə əlavə et
 
-# RunPod handler-i işə salırıq
+# Handler-i başladırıq
 CMD [ "python", "-u", "/handler.py" ]
