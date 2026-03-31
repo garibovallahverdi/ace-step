@@ -1,115 +1,140 @@
 import runpod
 import subprocess
-from pathlib import Path
-import uuid
+import time
+import requests
+import json
 import base64
 import os
+import signal
+import atexit
+from pathlib import Path
+
+# Qlobal proses
+api_process = None
+
+def start_ace_step_api():
+    """ACE-Step API serverini arxa planda işə salır."""
+    global api_process
+    try:
+        ace_step_dir = Path("/app/ACE-Step-1.5")
+        
+        # API serverini işə sal
+        cmd = ["uv", "run", "acestep-api"]
+        
+        api_process = subprocess.Popen(
+            cmd,
+            cwd=ace_step_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True
+        )
+        
+        # Serverin başlaması üçün gözlə
+        print("⏳ ACE-Step API server başladılır...")
+        time.sleep(15)
+        
+        # Test sorğusu
+        try:
+            test_response = requests.get("http://localhost:8001/health", timeout=5)
+            if test_response.status_code == 200:
+                print("✅ ACE-Step API server hazırdır!")
+                return True
+        except:
+            print("⚠️ Health check gözlənilir...")
+            time.sleep(5)
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ API server başlatma xətası: {e}")
+        return False
+
+def cleanup():
+    """Təmizləmə funksiyası"""
+    global api_process
+    if api_process:
+        print("🛑 ACE-Step API server dayandırılır...")
+        api_process.terminate()
+        api_process.wait(timeout=10)
+
+# Təmizləməni qeydə al
+atexit.register(cleanup)
+signal.signal(signal.SIGTERM, lambda sig, frame: cleanup())
 
 def handler(job):
+    """
+    RunPod serverless üçün əsas handler funksiyası.
+    """
     job_input = job["input"]
-    prompt = job_input.get("text", "")
+    
+    # Prompt və parametrləri al
+    prompt = job_input.get("prompt", "")
+    duration = job_input.get("duration", 30)
+    bpm = job_input.get("bpm", 120)
+    genre = job_input.get("genre", "pop")
+    steps = job_input.get("steps", 8)  # turbo model üçün 8
+    cfg_scale = job_input.get("cfg_scale", 1.0)
     
     if not prompt:
-        return {
-            "status": "error",
-            "message": "No text prompt provided"
-        }
+        return {"status": "error", "message": "Prompt boş ola bilməz"}
     
-    # DÜZGÜN YOL - ACE-Step-1.5 qovluğu
-    ace_step_path = Path("/app/ACE-Step-1.5")
+    print(f"🎵 Generating music: {prompt[:50]}...")
     
-    if not ace_step_path.exists():
-        return {
-            "status": "error",
-            "message": f"ACE-Step directory not found at {ace_step_path}"
-        }
-    
-    # infer.py faylını yoxla
-    infer_py = ace_step_path / "infer.py"
-    
-    if not infer_py.exists():
-        # Alternativ yolları yoxla
-        possible_paths = [
-            ace_step_path / "inference.py",
-            ace_step_path / "run.py",
-            ace_step_path / "main.py",
-            Path("/app/acestep/infer.py"),
-            Path("/app/infer.py")
-        ]
-        
-        for path in possible_paths:
-            if path.exists():
-                infer_py = path
-                break
-        
-        if not infer_py.exists():
-            # Faylları listele
-            files = list(ace_step_path.glob("*.py"))
-            return {
-                "status": "error",
-                "message": f"infer.py not found. Available py files: {[f.name for f in files]}"
-            }
-    
-    output_file = Path(f"/tmp/{uuid.uuid4()}.wav")
-    
-    # Komanda - düzgün yol ilə
-    cmd = [
-        "python",
-        str(infer_py),
-        "--text", prompt,
-        "--output", str(output_file)
-    ]
-    
-    print(f"Running: {' '.join(cmd)}")
+    # ACE-Step API-yə sorğu
+    payload = {
+        "prompt": prompt,
+        "duration": duration,
+        "bpm": bpm,
+        "genre": genre,
+        "steps": steps,
+        "cfg_scale": cfg_scale,
+        "format": "wav"
+    }
     
     try:
-        result = subprocess.run(
-            cmd,
-            cwd=str(ace_step_path),
-            capture_output=True,
-            text=True,
+        # API-yə POST sorğusu
+        response = requests.post(
+            "http://localhost:8001/generate",
+            json=payload,
             timeout=120
         )
         
-        print(f"Return code: {result.returncode}")
-        if result.stdout:
-            print(f"STDOUT: {result.stdout[:500]}")
-        if result.stderr:
-            print(f"STDERR: {result.stderr[:500]}")
-        
-        if result.returncode != 0:
+        if response.status_code != 200:
             return {
                 "status": "error",
-                "message": f"Command failed: {result.stderr}"
+                "message": f"ACE-Step API xətası ({response.status_code}): {response.text}"
             }
         
-        if not output_file.exists():
+        result = response.json()
+        
+        if "audio" in result and result["audio"]:
+            return {
+                "status": "success",
+                "audio": result["audio"],
+                "format": "wav",
+                "duration": duration,
+                "prompt": prompt
+            }
+        else:
             return {
                 "status": "error",
-                "message": f"Output file not created: {output_file}"
+                "message": "ACE-Step API audio data qaytarmadı"
             }
-        
-        with open(output_file, "rb") as f:
-            audio_data = f.read()
-        
-        audio_base64 = base64.b64encode(audio_data).decode()
-        output_file.unlink()
-        
-        return {
-            "status": "success",
-            "audio": audio_base64,
-            "size_bytes": len(audio_data)
-        }
-        
-    except subprocess.TimeoutExpired:
-        return {
-            "status": "error",
-            "message": "Command timeout after 120 seconds"
-        }
+            
+    except requests.exceptions.Timeout:
+        return {"status": "error", "message": "ACE-Step API vaxt aşımı (120s)"}
     except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+        return {"status": "error", "message": str(e)}
 
-runpod.serverless.start({"handler": handler})
+# RunPod serverless başlatma
+if __name__ == "__main__":
+    print("🚀 ACE-Step RunPod Worker başladılır...")
+    
+    # API serverini işə sal
+    if start_ace_step_api():
+        print("✅ API server hazır, handler işə salınır...")
+        runpod.serverless.start({"handler": handler})
+    else:
+        print("❌ API server başlamaq mümkün olmadı!")
+        exit(1)
