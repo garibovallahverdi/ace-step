@@ -30,4 +30,4 @@ jobs:
       with:
         context: .
         push: true
-        tags: ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+        tags: ${{ secrets.DOCKER_USERNAME }}/ace-step-runpod:latest
