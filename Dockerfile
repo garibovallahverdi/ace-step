@@ -1,17 +1,16 @@
-FROM python:3.10-slim
+# Python və CUDA (GPU üçün) olan hazır baza götürürük
+FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel
 
-WORKDIR /app
+# İş qovluğunu təyin edirik
+WORKDIR /
 
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    libsndfile1 \
-    && rm -rf /var/lib/apt/lists/*
-
+# Kitabxanaları kopyalayıb yükləyirik
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Model fayllarını və kodlarımızı içəri atırıq
 COPY handler.py .
+# Əgər modelin çəkisi (weights) yerlidirsə, onları da COPY ilə əlavə et
 
-EXPOSE 8000
-
-CMD ["python", "handler.py"]
+# RunPod handler-i işə salırıq
+CMD [ "python", "-u", "/handler.py" ]
