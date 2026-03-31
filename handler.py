@@ -2,6 +2,7 @@ import runpod
 import subprocess
 from pathlib import Path
 import uuid
+import base64
 
 def handler(job):
     job_input = job["input"]
@@ -19,9 +20,12 @@ def handler(job):
     try:
         subprocess.run(cmd, check=True)
 
+        with open(output_file, "rb") as f:
+            audio_base64 = base64.b64encode(f.read()).decode()
+
         return {
             "status": "success",
-            "file": str(output_file)
+            "audio": audio_base64
         }
 
     except Exception as e:
