@@ -12,15 +12,17 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --upgrade pip
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# RunPod SDK
 RUN pip install runpod
 
 # ACE-Step clone
 RUN git clone https://github.com/ace-step/ACE-Step-1.5.git
+
+# Simvolik link yarat - köhnə yol üçün
+RUN ln -s /app/ACE-Step-1.5 /app/acestep
+
+# ACE-Step dependencies
+RUN cd ACE-Step-1.5 && \
+    pip install --no-cache-dir -r requirements.txt || true
 
 COPY handler.py .
 
