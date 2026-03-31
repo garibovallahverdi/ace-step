@@ -5,15 +5,15 @@ import boto3
 import runpod
 import torch
 import torchaudio
+from diffusers import AudioLDM2Pipeline # ACE-Step adətən AudioLDM2 arxitekturasıdır
 
-# --- Supabase S3 Ayarları (Bunları öz məlumatlarınla doldur) ---
+# --- Supabase S3 Ayarları ---
 S3_ACCESS_KEY="1c1662d6ea35d30e1428e4afe11f81d5"
 S3_SECRET_KEY="2e07ed2d9ab9542afd91783626a373648b2baf3d7bc434891f44c46f24f7494c"
 S3_ENDPOINT="https://kgizqvyekmadsorqpbpc.storage.supabase.co/storage/v1/s3"
 BUCKET_NAME="music"
 REGION_NAME="ap-southeast-2"
 
-# S3 Müştərisini sazlayırıq
 s3_client = boto3.client(
     's3',
     endpoint_url=S3_ENDPOINT,
@@ -22,36 +22,50 @@ s3_client = boto3.client(
     region_name=REGION_NAME
 )
 
+# 1. Modelin Yüklənməsi (GPU-ya köçürülür)
 def load_model():
-    print("Model yüklənir...")
-    # ACE-Step modelini yükləmə kodunu bura əlavə edə bilərsən
-    return None
+    print("🚀 ACE-Step (AudioLDM2) Model yüklənir... Bu bir az vaxt ala bilər.")
+    # ACE-Step 1.5 üçün ən stabil model budur:
+    repo_id = "cvssp/audioldm2-music" 
+    pipe = AudioLDM2Pipeline.from_pretrained(repo_id, torch_dtype=torch.float16)
+    pipe.to("cuda")
+    print("✅ Model tam yükləndi!")
+    return pipe
 
-model_instance = load_model()
+# Modeli bir dəfə global olaraq yükləyirik
+model_pipe = load_model()
 
 def handler(job):
     try:
         job_input = job['input']
-        text = job_input.get("text", "Default song")
+        prompt = job_input.get("text", "Lofi hip hop beat, calm and relaxing")
+        duration = job_input.get("duration", 10) # Saniyə
         
-        # 1. Musiqi Yaratma Prosesi
-        # ACE-Step modelin hazır olanda bura yerləşdir:
-        # audio_tensor, sample_rate = model_instance.generate(text)
+        # 2. Musiqi Yaratma Prosesi (Real Model İşi)
+        print(f"🎵 Musiqi yaradılır: {prompt}")
         
-        # TEST ÜÇÜN: 5 saniyəlik boş səs yaradırıq
-        audio_tensor = torch.randn(1, 44100 * 5) 
-        sample_rate = 44100
+        # ACE-Step / AudioLDM2 səs yaradan hissə
+        with torch.inference_mode():
+            # audio_length_in_s modelin neçə saniyəlik səs yaradacağını təyin edir
+            audio_output = model_pipe(
+                prompt, 
+                audio_length_in_s=duration, 
+                num_inference_steps=50 # Keyfiyyət üçün 50 addım
+            ).audios[0]
 
-        # 2. Səsi Yaddaşda (RAM) WAV kimi hazırlamaq
+        # Numpy massivini Tensor-a çeviririk
+        audio_tensor = torch.from_numpy(audio_output).unsqueeze(0)
+        sample_rate = 16000 # AudioLDM2 adətən 16kHz çıxış verir
+
+        # 3. Səsi RAM-da WAV kimi hazırlamaq
         buffer = io.BytesIO()
-        # 'soundfile' backend-indən istifadə edərək daha stabil saxlama
         torchaudio.save(buffer, audio_tensor, sample_rate, format="wav", backend="soundfile")
         buffer.seek(0)
 
-        # 3. Fayl Adı (Unikal ID)
-        file_name = f"music_{uuid.uuid4()}.wav"
+        # 4. Fayl Adı
+        file_name = f"ace_{uuid.uuid4()}.wav"
         
-        # 4. S3-ə (Supabase Storage) Yükləmə
+        # 5. S3-ə Yükləmə
         s3_client.upload_fileobj(
             buffer, 
             BUCKET_NAME, 
@@ -59,19 +73,17 @@ def handler(job):
             ExtraArgs={'ContentType': 'audio/wav'}
         )
 
-        # 5. Public URL-in Yaradılması
-        # Supabase URL formatı: https://[ID].supabase.co/storage/v1/object/public/[BUCKET]/[FILE]
         base_url = S3_ENDPOINT.replace("/storage/v1/s3", "")
         public_url = f"{base_url}/storage/v1/object/public/{BUCKET_NAME}/{file_name}"
 
         return {
             "status": "success",
             "url": public_url,
-            "filename": file_name
+            "filename": file_name,
+            "prompt": prompt
         }
 
     except Exception as e:
-        return {"status": "error", "message": f"Xəta baş verdi: {str(e)}"}
+        return {"status": "error", "message": f"Xəta: {str(e)}"}
 
-# RunPod Worker-i başladırıq
 runpod.serverless.start({"handler": handler})
