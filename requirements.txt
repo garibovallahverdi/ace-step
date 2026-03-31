@@ -1,3 +1,5 @@
-runpod==1.3.0
-numpy==1.24.3
-scipy==1.11.3
+runpod
+torch
+torchaudio
+numpy
+# ACE-Step üçün lazım olan digər xüsusi kitabxanalar (əgər varsa bura əlavə et)
