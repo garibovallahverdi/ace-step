@@ -1,29 +1,33 @@
-FROM python:3.11-slim
+# ACE-Step 1.5 RunPod Serverless Image
+FROM runpod/base:0.6.0-cuda11.8.0
 
-WORKDIR /app
-
-ENV DEBIAN_FRONTEND=noninteractive
-
+# Sistem asılılıqları
 RUN apt-get update && apt-get install -y \
     git \
     ffmpeg \
-    libgl1 \
-    build-essential \
+    libsndfile1 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --upgrade pip
-RUN pip install runpod
+# uv-ni quraşdır
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.cargo/bin:$PATH"
 
-# ACE-Step clone
-RUN git clone https://github.com/ace-step/ACE-Step-1.5.git
+# İş qovluğu
+WORKDIR /app
 
-# Simvolik link yarat - köhnə yol üçün
-RUN ln -s /app/ACE-Step-1.5 /app/acestep
+# ACE-Step repository-sini klonla
+RUN git clone https://github.com/ace-step/ACE-Step-1.5.git /app/ACE-Step-1.5
+WORKDIR /app/ACE-Step-1.5
 
-# ACE-Step dependencies
-RUN cd ACE-Step-1.5 && \
-    pip install --no-cache-dir -r requirements.txt || true
+# Asılılıqları quraşdır (CUDA üçün)
+RUN uv sync --frozen --no-dev
 
-COPY handler.py .
+# Handler faylını əlavə et
+COPY handler.py /app/handler.py
 
-CMD ["python", "handler.py"]
+# Port
+EXPOSE 8000
+
+# RunPod handler-i işə sal
+CMD ["python", "-u", "/app/handler.py"]
