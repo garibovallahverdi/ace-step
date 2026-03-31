@@ -1,5 +1,4 @@
 runpod
 torch
 torchaudio
-numpy
-# ACE-Step üçün lazım olan digər xüsusi kitabxanalar (əgər varsa bura əlavə et)
+boto3
