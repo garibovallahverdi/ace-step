@@ -1,27 +1,74 @@
+import os
+import io
+import uuid
+import boto3
 import runpod
 import torch
-# Modelini yükləmək üçün lazım olan ACE-Step kodlarını bura import et
+import torchaudio
 
-# Modelini bir dəfə yükləyirik ki, hər dəfə vaxt itirməyək
+# --- Supabase S3 Ayarları ---
+
+S3_ACCESS_KEY="1c1662d6ea35d30e1428e4afe11f81d5"
+S3_SECRET_KEY="2e07ed2d9ab9542afd91783626a373648b2baf3d7bc434891f44c46f24f7494c"
+S3_ENDPOINT="https://kgizqvyekmadsorqpbpc.storage.supabase.co/storage/v1/s3"
+BUCKET_NAME="music"
+REGION_NAME="ap-southeast-2"
+
+# S3 Müştərisini başladırıq
+s3_client = boto3.client(
+    's3',
+    endpoint_url=S3_ENDPOINT,
+    aws_access_key_id=S3_ACCESS_KEY,
+    aws_secret_access_key=S3_SECRET_KEY,
+    region_name=REGION_NAME
+)
+
 def load_model():
     print("Model yüklənir...")
-    # Burada ACE-Step modelini yükləmə kodun olacaq
-    # Örnək: model = torch.load('model_path')
-    return "Model Hazırdır"
+    # ACE-Step model yükləmə kodunu bura əlavə et
+    return "MODEL"
 
 model_instance = load_model()
 
 def handler(job):
-    """
-    Job içində gələn məlumatlar: job['input']
-    """
-    job_input = job['input']
-    text = job_input.get("text", "Salam") # Məsələn, mətni götürürük
-    
-    # Burada modelin mətni səsə çevirmə prosesi baş verir
-    # result = model_instance.generate(text)
-    
-    return {"status": "success", "message": f"Mahnı hazırlandı: {text}"}
+    try:
+        job_input = job['input']
+        text = job_input.get("text", "Default music")
+        
+        # 1. Musiqi Yaratma (ACE-Step modelindən gələn çıxış)
+        # Örnək: audio_tensor, sample_rate = model_instance.generate(text)
+        audio_tensor = torch.randn(1, 44100 * 5) # Test üçün 5 saniyə
+        sample_rate = 44100
 
-# RunPod-u başladırıq
+        # 2. Səsi Yaddaşda Saxla (Buffer)
+        buffer = io.BytesIO()
+        torchaudio.save(buffer, audio_tensor, sample_rate, format="wav")
+        buffer.seek(0)
+
+        # 3. Fayl Adı Yaradılması
+        file_name = f"{uuid.uuid4()}.wav"
+        
+        # 4. S3 (Supabase) Yükləmə
+        s3_client.upload_fileobj(
+            buffer, 
+            BUCKET_NAME, 
+            file_name,
+            ExtraArgs={'ContentType': 'audio/wav'}
+        )
+
+        # 5. Public URL-in qurulması
+        # Supabase S3 üçün public URL formulu adətən belədir:
+        # https://[PROJECT_ID].supabase.co/storage/v1/object/public/[BUCKET]/[FILENAME]
+        project_url = S3_ENDPOINT.replace("/storage/v1/s3", "")
+        public_url = f"{project_url}/storage/v1/object/public/{BUCKET_NAME}/{file_name}"
+
+        return {
+            "status": "success",
+            "url": public_url,
+            "filename": file_name
+        }
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 runpod.serverless.start({"handler": handler})
